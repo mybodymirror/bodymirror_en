@@ -1583,7 +1583,7 @@
 <div class="card">
 <div class="entry-details"><strong>Version:</strong> beta</div>
 <div class="entry-details"><strong>Data mode:</strong> local in the browser</div>
-<div class="entry-details"><strong>Author:</strong> Monika / BodyMirror</div>
+<div class="entry-details"><strong>Author:</strong> SpawnLab / BodyMirror</div>
 <div class="entry-details"><strong>Important:</strong> use consistent product names, e.g. always “wheat roll”.</div>
 </div>
 <div class="modal-actions">
@@ -1948,6 +1948,84 @@
     return meals[0] || null;
   }
 
+
+  function previousDateStr(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  }
+
+  function entryDateTimeMs(dateStr, timeStr) {
+    const safeDate = dateStr || '';
+    const safeTime = timeStr || '00:00';
+    const d = new Date(`${safeDate}T${safeTime}`);
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  function bowelImpact(entry) {
+    const movement = String(entry.bowelMovement || '').trim();
+    const count = String(entry.bowelMovementCount || '').trim();
+    if (!movement) return null;
+
+    let severity = 2;
+    if (/normal/i.test(movement)) severity = 0;
+    else if (/none/i.test(movement)) severity = 4;
+    else if (/constipation|difficulty/i.test(movement)) severity = 6;
+    else if (/loose/i.test(movement)) severity = 6;
+    else if (/urgent/i.test(movement)) severity = 7;
+
+    if (/loose|urgent/i.test(movement)) {
+      if (/2–3|2-3/i.test(count)) severity += 1;
+      if (/4\+/i.test(count)) severity += 2;
+    }
+
+    severity = Math.max(0, Math.min(10, severity));
+    const symptoms = [`bowel movement: ${movement}${count ? ` (${count})` : ''}`];
+
+    return { movement, count, severity, symptoms };
+  }
+
+  function getBowelMealLinks(entry) {
+    if (!entry || !entry.mealDate || !entry.bowelMovement) return [];
+
+    const currentMs = entryDateTimeMs(entry.mealDate, entry.mealTime || '20:00');
+    const hour = Number((entry.mealTime || '').split(':')[0]);
+    const prevDay = previousDateStr(entry.mealDate);
+
+    const meals = mealEntries();
+    const sameDayMeals = meals.filter(m => m.mealDate === entry.mealDate);
+    const prevDayMeals = meals.filter(m => m.mealDate === prevDay);
+
+    const nearestSameDay = currentMs == null ? null : sameDayMeals
+      .map(m => ({ meal: m, ms: entryDateTimeMs(m.mealDate, m.mealTime || '00:00') }))
+      .filter(x => x.ms != null && x.ms <= currentMs)
+      .sort((a, b) => b.ms - a.ms)[0];
+
+    const impact = bowelImpact(entry);
+    const isImmediateLike = impact && /loose|urgent|normal/i.test(impact.movement) && !/2–3|2-3|4\+/i.test(impact.count || '');
+    const hoursAfterMeal = nearestSameDay ? (currentMs - nearestSameDay.ms) / 3600000 : null;
+
+    if (nearestSameDay && isImmediateLike && hoursAfterMeal != null && hoursAfterMeal >= 0 && hoursAfterMeal <= 3) {
+      return [{ meal: nearestSameDay.meal, delay: 'bowel movement after meal' }];
+    }
+
+    if (Number.isFinite(hour) && hour < 11) {
+      return prevDayMeals.map(meal => ({ meal, delay: 'morning bowel movement / previous day' }));
+    }
+
+    const dayMeals = [...sameDayMeals, ...prevDayMeals];
+    const seen = new Set();
+    return dayMeals
+      .filter(meal => {
+        if (seen.has(meal.id)) return false;
+        seen.add(meal.id);
+        return true;
+      })
+      .map(meal => ({ meal, delay: 'daily bowel movement' }));
+  }
+
   function toMealContextPhrase(ctx) {
     const map = {
       'breakfast': 'with breakfast',
@@ -2016,6 +2094,23 @@
           });
         });
       }
+    });
+
+    weightEntries().forEach(entry => {
+      const impact = bowelImpact(entry);
+      if (!impact) return;
+
+      getBowelMealLinks(entry).forEach(({ meal, delay }) => {
+        patternSources.push({
+          sourceKind: 'bowel',
+          products: meal.products || [],
+          contexts: (meal.contexts || []).length ? meal.contexts : ['no context'],
+          severity: impact.severity,
+          mood: null,
+          symptoms: impact.symptoms,
+          delay
+        });
+      });
     });
 
     patternSources.forEach(entry => {

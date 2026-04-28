@@ -1517,7 +1517,7 @@
 <button class="option-chip" data-group="symptomOnly" data-value="blocked nose">blocked nose</button>
 <button class="option-chip" data-group="symptomOnly" data-value="mucus in airways">mucus in airways</button>
 <button class="option-chip" data-group="symptomOnly" data-value="itching">itching</button>
-<button class="option-chip" data-group="symptomOnly" data-value="swelling">swelling</button>
+
 <button class="option-chip" data-group="symptomOnly" data-value="burping">burping</button>
 <button class="option-chip" data-group="symptomOnly" data-value="constipation">constipation</button>
 <button class="option-chip" data-group="symptomOnly" data-value="diarrhea">diarrhea</button>
@@ -1540,7 +1540,7 @@
 </div>
 <div class="sticky-save-wrap">
 <button class="save-btn" id="saveEntryBtn" onclick="saveEntry()">Save entry</button>
-<button class="secondary-btn hidden" id="cancelEditBtn" style="text-align:center;" type="button">Cancel edycję</button>
+<button class="secondary-btn hidden" id="cancelEditBtn" style="text-align:center;" type="button">Cancel edit</button>
 </div>
 </div>
 </div>
@@ -2957,7 +2957,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
     selectedSymptomOnly = [...(entry.kind === 'symptom' ? entry.symptoms : [])];
     selectedEntryMode = entry.kind === 'symptom' ? 'symptom' : (entry.kind === 'weight' ? 'weight' : 'meal');
     selectedSymptomKind = entry.symptomKind || 'night';
-    selectedBellyState = entry.bellyState || '';
+    selectedBellyState = normalizeBellyStates(entry.bellyStates || entry.bellyState);
     selectedHormonal = '';
     selectedSymptomHormonal = entry.kind === 'symptom' ? (entry.hormonalState || '') : '';
     selectedWeightBowel = entry.kind === 'weight' ? (entry.bowelMovement || '') : '';
@@ -2993,7 +2993,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
       else if (group === 'symptomContext') active = selectedSymptomContexts.includes(value);
       else if (group === 'symptom') active = selectedSymptoms.includes(value);
       else if (group === 'symptomKind') active = selectedSymptomKind === value;
-      else if (group === 'belly') active = selectedBellyState === value;
+      else if (group === 'belly') active = selectedBellyState.includes(value);
       else if (group === 'symptomOnly') active = selectedSymptomOnly.includes(value);
       else if (group === 'hormonal') active = selectedHormonal === value;
       else if (group === 'symptomHormonal') active = selectedSymptomHormonal === value;
@@ -3581,9 +3581,10 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
           document.querySelectorAll('[data-group="time"]').forEach(el => el.classList.remove('active'));
           btn.classList.add('active');
         } else if (group === 'delay') {
-          selectedDelay = value;
+          selectedDelay = selectedDelay === value ? '' : value;
           document.querySelectorAll('[data-group="delay"]').forEach(el => el.classList.remove('active'));
-          btn.classList.add('active');
+          btn.classList.toggle('active', selectedDelay === value);
+          updateModeUI();
         } else if (group === 'context') {
           selectedContexts = selectedContexts.includes(value) ? selectedContexts.filter(v => v !== value) : [...selectedContexts, value];
           btn.classList.toggle('active', selectedContexts.includes(value));

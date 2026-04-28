@@ -1583,7 +1583,7 @@
 <div class="card">
 <div class="entry-details"><strong>Version:</strong> beta</div>
 <div class="entry-details"><strong>Data mode:</strong> local in the browser</div>
-<div class="entry-details"><strong>Author:</strong> SpawnLab / BodyMirror</div>
+<div class="entry-details"><strong>Author:</strong> Monika / BodyMirror</div>
 <div class="entry-details"><strong>Important:</strong> use consistent product names, e.g. always “wheat roll”.</div>
 </div>
 <div class="modal-actions">
@@ -1793,8 +1793,24 @@
 
   function formatLiveDateTime() {
     const d = new Date();
-    const days = ['niedz.', 'pon.', 'wt.', 'Wed', 'czw.', 'pt.', 'sob.'];
-    return `${days[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()} • ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const dateLabel = d.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    return `${dateLabel} • ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  function formatDisplayDate(dateStr) {
+    if (!dateStr) return 'no date';
+    const d = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
   }
 
   function updateLiveDateTime() {
@@ -1892,7 +1908,7 @@
   }
 
   function entrySubtitle(entry) {
-    const dateLabel = entry.mealDate ? entry.mealDate.split('-').reverse().join('.') : 'no date';
+    const dateLabel = formatDisplayDate(entry.mealDate);
     const timeLabel = entry.mealTime || '--:--';
     const weight = entry.weight != null ? ` • ${String(entry.weight).replace('.', ',')} kg` : '';
     const hormonal = entry.hormonalState ? ` • ${entry.hormonalState}` : '';
@@ -2529,14 +2545,14 @@
     if (entry.kind === 'weight') {
       const bowel = entry.bowelMovement ? `<div class="entry-details">Bowel movement: ${esc(entry.bowelMovement)}${entry.bowelMovementCount ? ' • frequency: ' + esc(entry.bowelMovementCount) : ''}</div>` : '';
       const note = entry.note ? `<div class="entry-details">Notes: ${esc(entry.note)}</div>` : '';
-      return `<div class="entry-details">Pomiar: ${entry.weight != null ? esc(String(entry.weight).replace('.', ',')) + ' kg' : 'none entryu'}</div>${bowel}${note}<div class="entry-hint">Tap entry to see details.</div>`;
+      return `<div class="entry-details">Measurement: ${entry.weight != null ? esc(String(entry.weight).replace('.', ',')) + ' kg' : 'none'}</div>${bowel}${note}<div class="entry-hint">Tap entry to see details.</div>`;
     }
     const symptoms = entry.symptoms.length ? entry.symptoms.join(', ') : 'no symptoms';
     const linked = entry.kind === 'symptom' && entry.linkedMealId ? entries.find(e => e.id === entry.linkedMealId) : null;
     const delay = entry.kind === 'meal'
       ? (entry.delay && entry.delay !== 'unknown' ? ` • ${entry.delay}` : '')
-      : (linked ? ` • po entryie: ${esc(entryTitle(linked))}` : (entry.symptomKind === 'night' && entry.linkedDayDate ? ` • related to the day: ${entry.linkedDayDate.split('-').reverse().join('.')}` : ''));
-    const sleep = entry.sleepHours != null ? `<div class="entry-details">Sen: ${esc(String(entry.sleepHours).replace('.', ','))} h</div>` : '';
+      : (linked ? ` • after meal: ${esc(entryTitle(linked))}` : (entry.symptomKind === 'night' && entry.linkedDayDate ? ` • related to day: ${formatDisplayDate(entry.linkedDayDate)}` : ''));
+    const sleep = entry.sleepHours != null ? `<div class="entry-details">Sleep: ${esc(String(entry.sleepHours).replace('.', ','))} h</div>` : '';
     const note = entry.note ? `<div class="entry-details">Notes: ${esc(entry.note)}</div>` : '';
     return `<div class="entry-details">Symptoms: ${esc(symptoms)}${delay}</div>${sleep}${note}<div class="entry-hint">Tap entry to see details.</div>`;
   }
@@ -2599,7 +2615,7 @@
       if (dashboardDateFilter && !dateEntries.length) {
         hint.textContent = 'No data for the selected day.';
       } else if (dashboardDateFilter) {
-        hint.textContent = `Selected day: ${dashboardDateFilter.split('-').reverse().join('.')}.`;
+        hint.textContent = `Selected day: ${formatDisplayDate(dashboardDateFilter)}.`;
       } else {
         hint.textContent = '';
       }
@@ -2992,11 +3008,11 @@
     document.getElementById('entryDetailSubtitle').textContent = entrySubtitle(entry);
     document.getElementById('entryDetailContent').innerHTML = entry.kind === 'weight' ? `
       <div class="card">
-        <div class="insight-title">Weight i sen</div>
-        <div class="entry-details"><strong>Pomiar:</strong> ${entry.weight != null ? esc(String(entry.weight).replace('.', ',')) + ' kg' : 'none entryu'}</div>
-        <div class="entry-details"><strong>Sen:</strong> ${entry.sleepHours != null ? esc(String(entry.sleepHours).replace('.', ',')) + ' h' : 'none entryu'}</div>
-        <div class="entry-details"><strong>Bowel movement:</strong> ${entry.bowelMovement ? esc(entry.bowelMovement) : 'none entryu'}${entry.bowelMovementCount ? ' • frequency: ' + esc(entry.bowelMovementCount) : ''}</div>
-        <div class="entry-details"><strong>Data i godzina:</strong> ${esc(entry.mealDate ? entry.mealDate.split('-').reverse().join('.') : 'no date')} • ${esc(entry.mealTime || '--:--')}</div>
+        <div class="insight-title">Weight and sleep</div>
+        <div class="entry-details"><strong>Measurement:</strong> ${entry.weight != null ? esc(String(entry.weight).replace('.', ',')) + ' kg' : 'none'}</div>
+        <div class="entry-details"><strong>Sleep:</strong> ${entry.sleepHours != null ? esc(String(entry.sleepHours).replace('.', ',')) + ' h' : 'none'}</div>
+        <div class="entry-details"><strong>Bowel movement:</strong> ${entry.bowelMovement ? esc(entry.bowelMovement) : 'none'}${entry.bowelMovementCount ? ' • frequency: ' + esc(entry.bowelMovementCount) : ''}</div>
+        <div class="entry-details"><strong>Date and time:</strong> ${esc(formatDisplayDate(entry.mealDate))} • ${esc(entry.mealTime || '--:--')}</div>
         <div class="entry-details"><strong>Notes:</strong> ${esc(entry.note || 'none')}</div>
       </div>
     ` : `
@@ -3005,14 +3021,14 @@
         <div class="entry-details"><strong>Symptoms:</strong> ${esc(entry.symptoms.length ? entry.symptoms.join(', ') : 'no symptoms')}</div>
         ${entry.kind === 'meal' ? `<div class="entry-details"><strong>Delay:</strong> ${esc(entry.delay || 'unknown')}</div>` : ''}
         ${entry.kind === 'symptom' ? `<div class="entry-details"><strong>Entry type:</strong> ${entry.symptomKind === 'night' ? 'after the night' : 'delayed symptoms'}</div>` : ''}
-        ${entry.kind === 'symptom' && entry.bellyState ? `<div class="entry-details"><strong>Brzuch:</strong> ${esc(entry.bellyState)}</div>` : ''}
+        ${entry.kind === 'symptom' && entry.bellyState ? `<div class="entry-details"><strong>Belly:</strong> ${esc(entry.bellyState)}</div>` : ''}
         ${linked ? `<div class="entry-details"><strong>Linked to meal:</strong> ${esc(entryTitle(linked))}</div>` : ''}
-        ${entry.kind === 'symptom' && entry.symptomKind === 'night' && entry.linkedDayDate ? `<div class="entry-details"><strong>Related to the day:</strong> ${esc(entry.linkedDayDate.split('-').reverse().join('.'))}</div>` : ''}
+        ${entry.kind === 'symptom' && entry.symptomKind === 'night' && entry.linkedDayDate ? `<div class="entry-details"><strong>Related to day:</strong> ${esc(formatDisplayDate(entry.linkedDayDate))}</div>` : ''}
         <div class="entry-details"><strong>Severity:</strong> ${esc(String(entry.severity))}/10</div>
-        <div class="entry-details"><strong>Mood:</strong> ${entry.mood == null ? 'not specified' : esc(String(entry.mood)) + '/10'}</div>
-        <div class="entry-details"><strong>Hormonal state:</strong> ${esc(entry.hormonalState || 'nie zaznaczono')}</div>
-        ${entry.sleepHours != null ? `<div class="entry-details"><strong>Sen:</strong> ${esc(String(entry.sleepHours).replace('.', ','))} h</div>` : ''}
-        <div class="entry-details"><strong>Weight:</strong> ${entry.weight != null ? esc(String(entry.weight).replace('.', ',')) + ' kg' : 'none entryu'}</div>
+        <div class="entry-details"><strong>Mood:</strong> ${entry.mood == null ? 'not set' : esc(String(entry.mood)) + '/10'}</div>
+        <div class="entry-details"><strong>Hormonal state:</strong> ${esc(entry.hormonalState || 'not specified')}</div>
+        ${entry.sleepHours != null ? `<div class="entry-details"><strong>Sleep:</strong> ${esc(String(entry.sleepHours).replace('.', ','))} h</div>` : ''}
+        <div class="entry-details"><strong>Weight:</strong> ${entry.weight != null ? esc(String(entry.weight).replace('.', ',')) + ' kg' : 'none'}</div>
         <div class="entry-details"><strong>Notes:</strong> ${esc(entry.note || 'none')}</div>
       </div>
     `;

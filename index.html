@@ -2893,8 +2893,8 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
     const symptomContextMeta = document.getElementById('symptomContextMeta');
     const symptomSignsMeta = document.getElementById('symptomSignsMeta');
     const weightBowelMeta = document.getElementById('weightBowelMeta');
-    if (prodMeta) prodMeta.textContent = `${selectedProducts.length} produkt${selectedProducts.length===1?'':'y'}`;
-    if (symMeta) symMeta.textContent = `${selectedSymptoms.length} wybranych`;
+    if (prodMeta) prodMeta.textContent = `${selectedProducts.length} product${selectedProducts.length === 1 ? '' : 's'}`;
+    if (symMeta) symMeta.textContent = `${selectedSymptoms.length} selected`;
     if (ctxMeta) {
       const parts = [];
       if (selectedContexts.length) parts.push(selectedContexts.join(', '));
@@ -2908,7 +2908,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
       if (selectedDelay && selectedSymptomKind === 'delayed') parts.push(selectedDelay);
       symptomContextMeta.textContent = parts.length ? parts.join(' • ') : 'set details';
     }
-    if (symptomSignsMeta) symptomSignsMeta.textContent = `${selectedSymptomOnly.length} wybranych`;
+    if (symptomSignsMeta) symptomSignsMeta.textContent = `${selectedSymptomOnly.length} selected`;
     if (weightBowelMeta) weightBowelMeta.textContent = selectedWeightBowel ? `${selectedWeightBowel}${selectedWeightBowelCount ? ' • ' + selectedWeightBowelCount : ''}` : 'not set';
   }
 

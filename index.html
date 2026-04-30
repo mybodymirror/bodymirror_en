@@ -1021,6 +1021,28 @@
       stroke-width: 2;
     }
 
+
+    .weight-chart-hit {
+      fill: transparent;
+      cursor: pointer;
+    }
+
+    .weight-chart-tooltip {
+      position: fixed;
+      z-index: 90;
+      display: none;
+      pointer-events: none;
+      background: #f1f1ed;
+      color: #20201e;
+      border: 1px solid rgba(0,0,0,0.18);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.32);
+      max-width: 230px;
+    }
+
     .weight-chart-label,
     .weight-chart-ylabel {
       fill: var(--text2);
@@ -1893,17 +1915,27 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
       ? (['night', 'delayed', 'daily'].includes(entry.symptomKind) ? entry.symptomKind : 'delayed')
       : '';
 
+    const mealDate = entry.mealDate || '';
+    let linkedDayDate = entry.linkedDayDate || null;
+    if (entryKind === 'weight' && mealDate) {
+      linkedDayDate = previousDateStr(mealDate);
+    } else if (entryKind === 'symptom' && symptomKind === 'night' && mealDate) {
+      linkedDayDate = previousDateStr(mealDate);
+    } else if (entryKind === 'symptom' && symptomKind === 'daily' && mealDate) {
+      linkedDayDate = mealDate;
+    }
+
     return {
       id: entry.id || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())),
       kind: entryKind,
       symptomKind,
       symptomScope: entry.symptomScope || symptomKind || '',
       linkedMealId: entry.linkedMealId || null,
-      linkedDayDate: entry.linkedDayDate || null,
+      linkedDayDate,
       bellyState: bellyStates.join(', '),
       bellyStates,
       createdAt: entry.createdAt || new Date().toISOString(),
-      mealDate: entry.mealDate || '',
+      mealDate,
       mealTime: entry.mealTime || '',
       products,
       timeOfDay: entry.timeOfDay && entry.timeOfDay !== 'unknown' ? entry.timeOfDay : inferTimeOfDayFromClock(entry.mealTime),
@@ -1915,7 +1947,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
       note: String(entry.note || '').trim(),
       hormonalState: entry.hormonalState || '',
       sleepHours: normalizedSleep,
-      weight: Number.isFinite(Number(entry.weight)) && String(entry.weight).trim() !== '' && Number(entry.weight) > 0 ? Number(entry.weight) : null,
+      weight: isPlausibleWeightKg(entry.weight) ? Number(entry.weight) : null,
       bowelMovement: String(entry.bowelMovement || '').trim(),
       bowelMovementCount: String(entry.bowelMovementCount || '').trim()
     };
@@ -1966,7 +1998,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
 
   function setDefaultMealDateTime(force = false) {
     const now = new Date();
-    const dateValue = now.toISOString().split('T')[0];
+    const dateValue = todayDateStr();
     const timeValue = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const dateEl = document.getElementById('mealDateInput');
     const timeEl = document.getElementById('mealTimeInput');
@@ -2111,19 +2143,83 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
   }
 
 
+  
+  
+  function parseDecimalInput(value) {
+    const normalized = String(value ?? '').trim().replace(',', '.');
+    if (!normalized) return null;
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function isPlausibleWeightKg(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 25 && n <= 300;
+  }
+
+
+  function todayDateStr() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+
+  function dateStrToParts(dateStr) {
+    const match = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const y = Number(match[1]);
+    const m = Number(match[2]);
+    const d = Number(match[3]);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+    return { y, m, d };
+  }
+
+  function dateStrToLocalDate(dateStr) {
+    const parts = dateStrToParts(dateStr);
+    if (!parts) return null;
+    const date = new Date(parts.y, parts.m - 1, parts.d);
+    if (date.getFullYear() !== parts.y || date.getMonth() !== parts.m - 1 || date.getDate() !== parts.d) return null;
+    return date;
+  }
+
+  function localDateToDateStr(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function addDaysToDateStr(dateStr, days) {
+    const date = dateStrToLocalDate(dateStr);
+    if (!date) return '';
+    date.setDate(date.getDate() + Number(days || 0));
+    return localDateToDateStr(date);
+  }
+
+  function formatDateENShort(dateStr) {
+    const parts = dateStrToParts(dateStr);
+    if (!parts) return String(dateStr || '');
+    return `${String(parts.m).padStart(2, '0')}.${String(parts.d).padStart(2, '0')}`;
+  }
+
+  function formatDateENFull(dateStr) {
+    const parts = dateStrToParts(dateStr);
+    if (!parts) return String(dateStr || '');
+    return `${String(parts.m).padStart(2, '0')}.${String(parts.d).padStart(2, '0')}.${parts.y}`;
+  }
+
+
   function previousDateStr(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(`${dateStr}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return '';
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
+    return addDaysToDateStr(dateStr, -1);
   }
 
   function entryDateTimeMs(dateStr, timeStr) {
-    const safeDate = dateStr || '';
-    const safeTime = timeStr || '00:00';
-    const d = new Date(`${safeDate}T${safeTime}`);
-    return Number.isNaN(d.getTime()) ? null : d.getTime();
+    const date = dateStrToLocalDate(dateStr);
+    if (!date) return null;
+    const safeTime = String(timeStr || '00:00');
+    const match = safeTime.match(/^(\d{1,2}):(\d{2})/);
+    const hh = match ? Number(match[1]) : 0;
+    const mm = match ? Number(match[2]) : 0;
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+    date.setHours(hh, mm, 0, 0);
+    return date.getTime();
   }
 
   function bowelImpact(entry) {
@@ -2388,7 +2484,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
     });
 
     weightEntries().forEach(entry => {
-      if (entry.weight == null) return;
+      if (!isPlausibleWeightKg(entry.weight)) return;
       const dayKey = entry.mealDate;
       if (!dayKey) return;
       if (!byDate.has(dayKey)) {
@@ -2437,58 +2533,75 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
 
 
   function getWeightChartData() {
-    return getWeightDays().filter(day => day.hasMorningWeight).map(day => ({
-      date: day.date,
-      shortDate: day.date.split('-').slice(1).join('.'),
-      weight: day.weight
-    }));
+    return getWeightDays()
+      .filter(day => day.hasMorningWeight && isPlausibleWeightKg(day.weight))
+      .map(day => ({
+        date: day.date,
+        shortDate: formatDateENShort(day.date),
+        fullDate: formatDateENFull(day.date),
+        weight: Number(day.weight)
+      }));
   }
 
   function getWeightChartMarkup() {
     const points = getWeightChartData();
     if (!points.length) {
-      return `<div class="weight-chart-card"><div class="combo-title">Weight chart</div><div class="combo-sub">Add your first weight entry and the chart will start showing the trend over time.</div></div>`;
+      return `<div class="weight-chart-card"><div class="combo-title">Weight chart</div><div class="combo-sub">Add your first weight entry and the chart will start showing your trend over time.</div></div>`;
     }
 
     const width = 340;
     const height = 180;
-    const left = 36;
+    const left = 44;
     const right = 12;
-    const top = 12;
-    const bottom = 28;
-    const minIn = Math.min(...points.map(p => p.weight));
-    const maxIn = Math.max(...points.map(p => p.weight));
-    const minY = minIn - 0.1;
-    const maxY = maxIn + 0.1;
-    const innerIn = width - left - right;
+    const top = 16;
+    const bottom = 32;
+    const innerW = width - left - right;
     const innerH = height - top - bottom;
 
+    const startWeight = points[0].weight;
+    const values = points.map(p => p.weight);
+    const minW = Math.min(...values);
+    const maxW = Math.max(...values);
+    const rawSpan = maxW - minW;
+    const pad = Math.max(0.15, rawSpan * 0.35);
+    const minY = rawSpan === 0 ? startWeight - 0.5 : minW - pad;
+    const maxY = rawSpan === 0 ? startWeight + 0.5 : maxW + pad;
+    const baselineY = top + ((maxY - startWeight) / Math.max(0.1, (maxY - minY))) * innerH;
+
     const mapped = points.map((p, i) => {
-      const x = left + (points.length === 1 ? innerIn / 2 : (i * innerIn / (points.length - 1)));
-      const y = top + ((maxY - p.weight) / Math.max(0.2, (maxY - minY))) * innerH;
-      return { ...p, x, y };
+      const x = left + (points.length === 1 ? innerW / 2 : (i * innerW / (points.length - 1)));
+      const y = top + ((maxY - p.weight) / Math.max(0.1, (maxY - minY))) * innerH;
+      const delta = Number((p.weight - startWeight).toFixed(2));
+      const deltaText = delta === 0 ? '±0.00 kg' : `${delta > 0 ? '+' : ''}${delta.toFixed(2)} kg`;
+      return { ...p, x, y, delta, deltaText };
     });
 
     const d = mapped.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-    const yLabels = [maxY, (maxY + minY) / 2, minY].map(v => v.toFixed(1).replace('.', ','));
+    const yLabels = [
+      { y: top, text: `${maxY.toFixed(1)} kg` },
+      { y: Math.min(top + innerH - 10, Math.max(top + 12, baselineY)), text: `start ${startWeight.toFixed(1)} kg` },
+      { y: top + innerH, text: `${minY.toFixed(1)} kg` }
+    ];
     const xLabels = mapped.length >= 3 ? [mapped[0], mapped[Math.floor((mapped.length - 1) / 2)], mapped[mapped.length - 1]] : mapped;
 
     return `
       <div class="weight-chart-card">
         <div class="combo-title">Weight chart</div>
-        <div class="combo-sub">Trend preview from ${points.length} entry${plural(points.length)} weight entries. Typical analysis appears after 10 entries.</div>
+        <div class="combo-sub">Trend from your first measurement: ${startWeight.toFixed(2)} kg. Hover or tap a point to see details.</div>
         <svg class="weight-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Weight chart">
           <line class="weight-chart-grid" x1="${left}" y1="${top}" x2="${width - right}" y2="${top}"></line>
-          <line class="weight-chart-grid" x1="${left}" y1="${top + innerH/2}" x2="${width - right}" y2="${top + innerH/2}"></line>
+          <line class="weight-chart-grid" x1="${left}" y1="${baselineY.toFixed(1)}" x2="${width - right}" y2="${baselineY.toFixed(1)}"></line>
           <line class="weight-chart-grid" x1="${left}" y1="${top + innerH}" x2="${width - right}" y2="${top + innerH}"></line>
           <line class="weight-chart-axis" x1="${left}" y1="${top}" x2="${left}" y2="${top + innerH}"></line>
           <line class="weight-chart-axis" x1="${left}" y1="${top + innerH}" x2="${width - right}" y2="${top + innerH}"></line>
           ${mapped.length > 1 ? `<path class="weight-chart-line" d="${d}"></path>` : ''}
-          ${mapped.map(p => `<circle class="weight-chart-point" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"></circle>`).join('')}
-          <text class="weight-chart-ylabel" x="4" y="${top + 4}">${yLabels[0]} kg</text>
-          <text class="weight-chart-ylabel" x="4" y="${top + innerH/2 + 4}">${yLabels[1]} kg</text>
-          <text class="weight-chart-ylabel" x="4" y="${top + innerH + 4}">${yLabels[2]} kg</text>
-          ${xLabels.map((p) => `<text class="weight-chart-label" text-anchor="middle" x="${p.x.toFixed(1)}" y="${height - 6}">${p.shortDate}</text>`).join('')}
+          ${mapped.map(p => `
+            <circle class="weight-chart-point" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"></circle>
+            <circle class="weight-chart-hit" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="13"
+              data-weight-tooltip="${esc(`${p.fullDate} • ${p.weight.toFixed(2)} kg • change from start: ${p.deltaText}`)}"></circle>
+          `).join('')}
+          ${yLabels.map(label => `<text class="weight-chart-ylabel" x="4" y="${label.y + 4}">${label.text}</text>`).join('')}
+          ${xLabels.map((p) => `<text class="weight-chart-label" text-anchor="middle" x="${p.x.toFixed(1)}" y="${height - 8}">${p.shortDate}</text>`).join('')}
         </svg>
       </div>
     `;
@@ -2763,7 +2876,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
       return;
     }
 
-    const allDashboardEntries = [...entries];
+    const allDashboardEntries = entries.filter(entry => entry.kind !== 'weight');
     const dateEntries = dashboardDateFilter ? allDashboardEntries.filter(e => e.mealDate === dashboardDateFilter) : [...allDashboardEntries];
     let filtered = [...dateEntries];
     if (dashboardColorFilter !== 'all') filtered = filtered.filter(entry => severityGroup(entry) === dashboardColorFilter);
@@ -3146,7 +3259,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
     renderProductTags();
     setDefaultMealDateTime(true);
     const now = new Date();
-    const nowDate = now.toISOString().split('T')[0];
+    const nowDate = todayDateStr();
     const nowTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     document.getElementById('symptomDateInput').value = nowDate;
     document.getElementById('symptomTimeInput').value = nowTime;
@@ -3204,10 +3317,9 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
       const mealTime = document.getElementById('weightTimeInput').value;
       const weightRaw = document.getElementById('weightOnlyInput').value.trim();
       const sleepRaw = document.getElementById('weightSleepInput').value.trim();
-      const sleepHours = sleepRaw === '' ? null : Number(sleepRaw);
+      const sleepHours = sleepRaw === '' ? null : parseDecimalInput(sleepRaw);
       const note = document.getElementById('weightNoteInput').value.trim();
-      const baseDate = mealDate ? new Date(`${mealDate}T00:00:00`) : null;
-      const linkedDayDate = baseDate && !Number.isNaN(baseDate.getTime()) ? new Date(baseDate.getTime() - 86400000).toISOString().split('T')[0] : null;
+      const linkedDayDate = mealDate ? previousDateStr(mealDate) : null;
 
       if (!mealDate) {
         alert('Fill in the morning / weight entry date.');
@@ -3221,6 +3333,12 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
 
       if (!hasWeightValue && !hasSleepValue && !hasBowelValue && !hasBowelCountValue && !hasNoteValue) {
         alert('Add at least one detail: weight, sleep, bowel movement, or notes.');
+        return;
+      }
+
+      const parsedWeight = hasWeightValue ? parseDecimalInput(weightRaw) : null;
+      if (hasWeightValue && !isPlausibleWeightKg(parsedWeight)) {
+        alert('The weight looks incorrect. Enter a value in kg, e.g. 66.1.');
         return;
       }
 
@@ -3241,7 +3359,7 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
         note,
         hormonalState: '',
         sleepHours,
-        weight: hasWeightValue ? Number(weightRaw) : null,
+        weight: hasWeightValue ? parsedWeight : null,
         bowelMovement: selectedWeightBowel,
         bowelMovementCount: selectedWeightBowel ? selectedWeightBowelCount : ''
       });
@@ -3274,12 +3392,11 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
       const severity = selectedSymptomOnly.length ? Number(document.getElementById('symptomSeverityRange').value) : 0;
       const mood = document.getElementById('symptomMoodRange').dataset.touched === 'true' ? Number(document.getElementById('symptomMoodRange').value) : null;
       const note = document.getElementById('symptomNoteInput').value.trim();
-      const baseDate = new Date(`${mealDate}T00:00:00`);
       const wantsNightLogic = selectedSymptomKind === 'night' || selectedDelay === 'overnight';
       const effectiveSymptomKind = wantsNightLogic ? 'night' : selectedSymptomKind;
       const linkedMeal = effectiveSymptomKind === 'delayed' ? findBestMealForDelayedSymptom(mealDate, mealTime, selectedDelay) : null;
-      const linkedDayDate = wantsNightLogic && !Number.isNaN(baseDate.getTime())
-        ? new Date(baseDate.getTime() - 86400000).toISOString().split('T')[0]
+      const linkedDayDate = wantsNightLogic
+        ? previousDateStr(mealDate)
         : (effectiveSymptomKind === 'daily' ? mealDate : null);
 
       const prepared = normalizeEntryData({
@@ -3860,6 +3977,54 @@ function findBestMealForDelayedSymptom(dateStr, timeStr, delay) {
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+
+    let weightTooltipEl = null;
+
+    function ensureWeightTooltip() {
+      if (weightTooltipEl) return weightTooltipEl;
+      weightTooltipEl = document.createElement('div');
+      weightTooltipEl.className = 'weight-chart-tooltip';
+      document.body.appendChild(weightTooltipEl);
+      return weightTooltipEl;
+    }
+
+    function showWeightTooltip(event, text) {
+      const tip = ensureWeightTooltip();
+      tip.textContent = text || '';
+      tip.style.display = 'block';
+      moveWeightTooltip(event);
+    }
+
+    function moveWeightTooltip(event) {
+      if (!weightTooltipEl || weightTooltipEl.style.display !== 'block') return;
+      const x = Math.min(window.innerWidth - 240, Math.max(12, event.clientX + 12));
+      const y = Math.min(window.innerHeight - 70, Math.max(12, event.clientY + 12));
+      weightTooltipEl.style.left = `${x}px`;
+      weightTooltipEl.style.top = `${y}px`;
+    }
+
+    function hideWeightTooltip() {
+      if (weightTooltipEl) weightTooltipEl.style.display = 'none';
+    }
+
+    document.addEventListener('pointerover', (event) => {
+      const target = event.target.closest && event.target.closest('.weight-chart-hit');
+      if (target) showWeightTooltip(event, target.dataset.weightTooltip);
+    });
+
+    document.addEventListener('pointermove', (event) => {
+      if (event.target.closest && event.target.closest('.weight-chart-hit')) moveWeightTooltip(event);
+    });
+
+    document.addEventListener('pointerout', (event) => {
+      if (event.target.closest && event.target.closest('.weight-chart-hit')) hideWeightTooltip();
+    });
+
+    document.addEventListener('click', (event) => {
+      const target = event.target.closest && event.target.closest('.weight-chart-hit');
+      if (target) showWeightTooltip(event, target.dataset.weightTooltip);
+    });
+
   
   const BM_DATE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const BM_DATE_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
